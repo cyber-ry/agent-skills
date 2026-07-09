@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Official Redis plugins for Cursor",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "pluginRoot": "skills"
   },
   "plugins": [
@@ -30,7 +30,7 @@
       "name": "redis-search",
       "source": "redis-search",
       "description": "Redis Search — FT.CREATE schema, FT.SEARCH / FT.AGGREGATE / FT.HYBRID, DIALECT 2, vector similarity (HNSW / FLAT), hybrid retrieval, RAG pipelines, zero-downtime index updates.",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "category": "database",
       "tags": ["redis", "search", "query-engine", "vector-search", "hybrid", "rag", "ai"]
     },

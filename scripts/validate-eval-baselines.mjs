@@ -108,6 +108,27 @@ function checkMatrix(suite, current, baseline) {
   }
 }
 
+// A promoted baseline names its own suite, so a directory holding another
+// suite's aggregate is caught even when the eval names happen to align.
+function checkIdentity(suite, baseline, benchmark) {
+  const claimed = [
+    ["baseline.json skill_name", baseline.skill_name, suite.skill],
+    ["baseline.json eval_suite", baseline.eval_suite, suite.suite],
+    ["aggregate context.skill_name", benchmark.context?.skill_name, suite.skill],
+    ["aggregate context.suite_name", benchmark.context?.suite_name, suite.suite],
+  ];
+
+  for (const [field, actual, expected] of claimed) {
+    if (actual !== undefined && actual !== expected) {
+      addError(
+        `${suite.skill}/${suite.suite}: baseline belongs to a different suite ` +
+          `(${field} is "${actual}", expected "${expected}"). ` +
+          `Re-promote it from this suite's own run: ${promoteHint(suite)}`
+      );
+    }
+  }
+}
+
 function checkEvalSet(suite, evalsFile, benchmark) {
   const expected = (evalsFile.evals ?? []).map((item) => evalKey(item.id, item.name));
   const recorded = (benchmark.evals ?? []).map((item) =>
@@ -151,6 +172,10 @@ async function validateSuite(suite) {
     path.join(suite.suiteDir, "model-matrix.json"),
     "model-matrix.json"
   );
+  const baseline = await readJsonFile(
+    path.join(baselineDir, "baseline.json"),
+    "baseline.json"
+  );
   const baselineMatrix = await readJsonFile(
     path.join(baselineDir, "model-matrix.json"),
     "baseline model-matrix.json"
@@ -160,8 +185,9 @@ async function validateSuite(suite) {
     "baseline aggregate-benchmark.json"
   );
 
-  if (!evalsFile || !currentMatrix || !baselineMatrix || !benchmark) return;
+  if (!evalsFile || !currentMatrix || !baseline || !baselineMatrix || !benchmark) return;
 
+  checkIdentity(suite, baseline, benchmark);
   checkMatrix(suite, currentMatrix, baselineMatrix);
   checkEvalSet(suite, evalsFile, benchmark);
 }
@@ -169,8 +195,19 @@ async function validateSuite(suite) {
 async function main() {
   const suites = await findEvalSuites();
 
+  // Skills but no suites means a wrong working directory or removed suite files;
+  // exiting 0 there would report success for having validated nothing.
   if (suites.length === 0) {
-    console.log("No eval suites found.");
+    const skills = await listDirectories(skillsRoot);
+    if (skills.length > 0) {
+      console.error(
+        `Eval baseline validation failed:\n- found ${skills.length} skills under ` +
+          `${relative(skillsRoot)} but no eval suites. Expected each suite to hold ` +
+          `evals.json and model-matrix.json.`
+      );
+      process.exit(1);
+    }
+    console.log(`No skills found under ${relative(skillsRoot)}.`);
     process.exit(0);
   }
 

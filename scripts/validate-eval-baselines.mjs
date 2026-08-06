@@ -48,6 +48,8 @@ async function listDirectories(target) {
   }
 }
 
+// Both files are what the runner treats as a suite, so requiring the same pair
+// keeps this from demanding baselines for a directory that cannot be run yet.
 async function findEvalSuites() {
   const suites = [];
   for (const skill of await listDirectories(skillsRoot)) {
@@ -56,17 +58,20 @@ async function findEvalSuites() {
       const suiteDir = path.join(evalsDir, suite);
       try {
         await fs.access(path.join(suiteDir, "evals.json"));
+        await fs.access(path.join(suiteDir, "model-matrix.json"));
         suites.push({ skill, suite, suiteDir });
       } catch {
-        // Not an eval suite; the runner ignores these too.
+        // Not a runnable eval suite; the runner skips these too.
       }
     }
   }
   return suites.sort((left, right) => relative(left.suiteDir).localeCompare(relative(right.suiteDir)));
 }
 
+// No --iteration: eval:baseline resolves it from the matrix's default_iteration,
+// so a hardcoded iteration-1 would re-promote an older run's results.
 function promoteHint({ skill, suite }) {
-  return `npm run eval:baseline -- --skill ${skill} --suite ${suite} --iteration iteration-1`;
+  return `npm run eval:baseline -- --skill ${skill} --suite ${suite}`;
 }
 
 // Compared as a set: reordering the model list does not change what was measured.
@@ -84,6 +89,13 @@ function describe(value) {
   return Array.isArray(value) ? `[${value.join(", ")}]` : String(value);
 }
 
+// Mirrors how the aggregate names an eval: trimmed, falling back to eval-<id>
+// when blank. Diverging here would fail a suite straight after a valid promote.
+function evalKey(id, name) {
+  const trimmed = typeof name === "string" ? name.trim() : "";
+  return `${id}:${trimmed || `eval-${id}`}`;
+}
+
 function checkMatrix(suite, current, baseline) {
   for (const field of MATRIX_FIELDS) {
     if (!sameValue(current?.[field], baseline?.[field])) {
@@ -97,11 +109,9 @@ function checkMatrix(suite, current, baseline) {
 }
 
 function checkEvalSet(suite, evalsFile, benchmark) {
-  const expected = (evalsFile.evals ?? []).map(
-    (item) => `${item.id}:${item.name ?? `eval-${item.id}`}`
-  );
-  const recorded = (benchmark.evals ?? []).map(
-    (item) => `${item.eval_id}:${item.eval_name ?? `eval-${item.eval_id}`}`
+  const expected = (evalsFile.evals ?? []).map((item) => evalKey(item.id, item.name));
+  const recorded = (benchmark.evals ?? []).map((item) =>
+    evalKey(item.eval_id, item.eval_name)
   );
 
   const missing = expected.filter((item) => !recorded.includes(item));

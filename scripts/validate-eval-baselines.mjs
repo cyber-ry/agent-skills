@@ -39,11 +39,16 @@ function relative(target) {
   return path.relative(repoRoot, target);
 }
 
+// A missing directory is a legitimate empty result; anything else (permissions,
+// I/O) must not read as "nothing here" and quietly pass the whole run.
 async function listDirectories(target) {
   try {
     const entries = await fs.readdir(target, { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-  } catch {
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      addError(`could not read ${relative(target)}: ${error.message}`);
+    }
     return [];
   }
 }
@@ -159,6 +164,32 @@ function checkIdentity(suite, evalsFile, currentMatrix, baseline, benchmark) {
   }
 }
 
+// checkMatrix compares two copies of the matrix, so it cannot see whether the
+// run behind the baseline actually covered them. A run killed partway and then
+// promoted yields a baseline whose scores come from a subset of the models.
+function checkCoverage(suite, currentMatrix, benchmark) {
+  if (!Array.isArray(currentMatrix.models) || !Array.isArray(benchmark.models)) return;
+
+  const expected = currentMatrix.models.map(String);
+  const scored = benchmark.models.map((entry) => entry?.model).filter(Boolean).map(String);
+
+  const missing = expected.filter((model) => !scored.includes(model));
+  const extra = scored.filter((model) => !expected.includes(model));
+
+  if (missing.length > 0) {
+    addError(
+      `${suite.skill}/${suite.suite}: baseline holds no results for ${missing.join(", ")}. ` +
+        `The promoted run did not cover the whole matrix. ${promoteHint(suite)}`
+    );
+  }
+  if (extra.length > 0) {
+    addError(
+      `${suite.skill}/${suite.suite}: baseline scores ${extra.join(", ")}, which the ` +
+        `matrix no longer lists. ${promoteHint(suite)}`
+    );
+  }
+}
+
 function checkEvalSet(suite, evalsFile, benchmark) {
   // A malformed evals field should read as a validation error, not a TypeError
   // out of .map that aborts the whole run.
@@ -240,6 +271,7 @@ async function validateSuite(suite) {
 
   checkIdentity(suite, evalsFile, currentMatrix, baseline, benchmark);
   checkMatrix(suite, currentMatrix, baselineMatrix);
+  checkCoverage(suite, currentMatrix, benchmark);
   checkEvalSet(suite, evalsFile, benchmark);
 }
 
@@ -247,19 +279,20 @@ async function main() {
   const suites = await findEvalSuites();
 
   // Skills but no suites means a wrong working directory or removed suite files;
-  // exiting 0 there would report success for having validated nothing.
-  if (suites.length === 0) {
+  // exiting 0 there would report success for having validated nothing. Discovery
+  // errors fall through to the report rather than reading as an empty repo.
+  if (suites.length === 0 && errors.length === 0) {
     const skills = await listDirectories(skillsRoot);
-    if (skills.length > 0) {
-      console.error(
-        `Eval baseline validation failed:\n- found ${skills.length} skills under ` +
-          `${relative(skillsRoot)} but no eval suites. Expected each suite to hold ` +
-          `evals.json and model-matrix.json.`
-      );
-      process.exit(1);
+    if (skills.length === 0 && errors.length === 0) {
+      console.log(`No skills found under ${relative(skillsRoot)}.`);
+      process.exit(0);
     }
-    console.log(`No skills found under ${relative(skillsRoot)}.`);
-    process.exit(0);
+    if (skills.length > 0) {
+      addError(
+        `found ${skills.length} skills under ${relative(skillsRoot)} but no eval ` +
+          `suites. Expected each suite to hold evals.json and model-matrix.json.`
+      );
+    }
   }
 
   for (const suite of suites) {

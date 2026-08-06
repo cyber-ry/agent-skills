@@ -78,6 +78,10 @@ interface CommandResult {
   stdout: string
   stderr: string
   durationMs: number
+  // A retried attempt may already have been billed, so its cost is carried
+  // forward here rather than discarded with the failed result.
+  attempts?: number
+  discardedCostUsd?: number
 }
 
 interface CommandUsageSummary {
@@ -522,7 +526,12 @@ Return JSON only, with this exact shape:
 
 Escape every backslash and quote inside JSON strings so the response parses.`,
     })
-    return { grading: result, parsed: parseJsonObject(extractClaudeText(result.stdout)) }
+    try {
+      return { grading: result, parsed: parseJsonObject(extractClaudeText(result.stdout)) }
+    } catch (error) {
+      // Carry the result so the retry keeps this attempt's already-billed cost.
+      throw Object.assign(error as Error, { result })
+    }
   })
 
   const rawResults = Array.isArray(parsed.expectations) ? parsed.expectations : []
@@ -552,8 +561,10 @@ Escape every backslash and quote inside JSON strings so the response parses.`,
       pass_rate: total === 0 ? 0 : passed / total,
     },
     usage,
+    attempts: grading.attempts ?? 1,
     cost: {
-      total_usd: usage.total_cost_usd ?? 0,
+      total_usd: (usage.total_cost_usd ?? 0) + (grading.discardedCostUsd ?? 0),
+      discarded_retry_usd: grading.discardedCostUsd ?? 0,
       source: 'claude_cli_total_cost_usd',
     },
     execution_metrics: {
@@ -619,10 +630,13 @@ const CLAUDE_ATTEMPTS = 3
 const CLAUDE_RETRY_BASE_MS = 5_000
 
 async function runClaudeWithRetry(input: ClaudeInput): Promise<CommandResult> {
+  let discardedCostUsd = 0
   for (let attempt = 1; ; attempt += 1) {
     try {
-      return await runClaude(input)
+      const result = await runClaude(input)
+      return { ...result, attempts: attempt, discardedCostUsd }
     } catch (error) {
+      discardedCostUsd += failedAttemptCostUsd(error)
       if (attempt >= CLAUDE_ATTEMPTS) throw error
       const waitMs = CLAUDE_RETRY_BASE_MS * 2 ** (attempt - 1)
       logProgress(
@@ -633,15 +647,31 @@ async function runClaudeWithRetry(input: ClaudeInput): Promise<CommandResult> {
   }
 }
 
+// A failed attempt is often still billed, so recover what the CLI reported to
+// keep the recorded spend from understating what the run actually cost.
+function failedAttemptCostUsd(error: unknown): number {
+  const stdout = (error as { result?: CommandResult })?.result?.stdout
+  if (!stdout) return 0
+  return commandUsageSummary(stdout).total_cost_usd ?? 0
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms))
 }
 
-async function withJudgeRetry<T>(attempt: () => Promise<T>): Promise<T> {
+async function withJudgeRetry<T extends { grading: CommandResult }>(
+  attempt: () => Promise<T>
+): Promise<T> {
+  let discardedCostUsd = 0
   for (let tries = 1; ; tries += 1) {
     try {
-      return await attempt()
+      const value = await attempt()
+      return {
+        ...value,
+        grading: { ...value.grading, attempts: tries, discardedCostUsd },
+      }
     } catch (error) {
+      discardedCostUsd += failedAttemptCostUsd(error)
       if (tries >= CLAUDE_ATTEMPTS) throw error
       const waitMs = CLAUDE_RETRY_BASE_MS * 2 ** (tries - 1)
       logProgress(
@@ -702,10 +732,13 @@ async function runCommand(
         // The Claude CLI reports API errors on stdout as JSON and leaves stderr
         // empty, so include both or the failure is undiagnosable.
         reject(
-          new Error(
-            `${command} ${args.join(' ')} failed with exit code ${code}\n` +
-              `stderr: ${result.stderr.trim() || '(empty)'}\n` +
-              `stdout: ${result.stdout.trim().slice(0, 2000) || '(empty)'}`
+          Object.assign(
+            new Error(
+              `${command} ${args.join(' ')} failed with exit code ${code}\n` +
+                `stderr: ${result.stderr.trim() || '(empty)'}\n` +
+                `stdout: ${result.stdout.trim().slice(0, 2000) || '(empty)'}`
+            ),
+            { result }
           )
         )
       }
@@ -750,8 +783,10 @@ async function writeTiming(
     total_duration_seconds: seconds(result.durationMs),
     total_tokens: usage.total_tokens,
     usage,
+    attempts: result.attempts ?? 1,
     cost: {
-      total_usd: usage.total_cost_usd ?? 0,
+      total_usd: (usage.total_cost_usd ?? 0) + (result.discardedCostUsd ?? 0),
+      discarded_retry_usd: result.discardedCostUsd ?? 0,
       source: 'claude_cli_total_cost_usd',
     },
     raw_result: parsed ?? undefined,

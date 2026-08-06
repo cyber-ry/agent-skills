@@ -97,6 +97,21 @@ function evalKey(id, name) {
 }
 
 function checkMatrix(suite, current, baseline) {
+  // Comparison is order-insensitive, so a duplicate would match a duplicate. The
+  // runner schedules one task per entry and writes per model, so repeats collide.
+  for (const field of ["models", "configurations"]) {
+    const values = current?.[field];
+    if (!Array.isArray(values)) continue;
+    const repeated = [...new Set(values.filter((v, i) => values.indexOf(v) !== i))];
+    if (repeated.length > 0) {
+      addError(
+        `${suite.skill}/${suite.suite}: model-matrix.json ${field} repeats ` +
+          `${repeated.join(", ")}. Each entry schedules its own run, so repeats ` +
+          `overwrite the same output paths.`
+      );
+    }
+  }
+
   for (const field of MATRIX_FIELDS) {
     if (!sameValue(current?.[field], baseline?.[field])) {
       addError(
@@ -112,18 +127,29 @@ function checkMatrix(suite, current, baseline) {
 // skill directory from evals.json's skill_name, so a wrong name runs against
 // another skill rather than failing. The directory is the ground truth.
 function checkIdentity(suite, evalsFile, currentMatrix, baseline, benchmark) {
+  // required mirrors the runner: it demands evals.json's two fields and treats
+  // model-matrix.json's eval_suite as optional.
   const claimed = [
-    ["evals.json skill_name", evalsFile.skill_name, suite.skill],
-    ["evals.json eval_suite", evalsFile.eval_suite, suite.suite],
-    ["model-matrix.json eval_suite", currentMatrix.eval_suite, suite.suite],
-    ["baseline.json skill_name", baseline.skill_name, suite.skill],
-    ["baseline.json eval_suite", baseline.eval_suite, suite.suite],
-    ["aggregate context.skill_name", benchmark.context?.skill_name, suite.skill],
-    ["aggregate context.suite_name", benchmark.context?.suite_name, suite.suite],
+    ["evals.json skill_name", evalsFile.skill_name, suite.skill, true],
+    ["evals.json eval_suite", evalsFile.eval_suite, suite.suite, true],
+    ["model-matrix.json eval_suite", currentMatrix.eval_suite, suite.suite, false],
+    ["baseline.json skill_name", baseline.skill_name, suite.skill, true],
+    ["baseline.json eval_suite", baseline.eval_suite, suite.suite, true],
+    ["aggregate context.skill_name", benchmark.context?.skill_name, suite.skill, true],
+    ["aggregate context.suite_name", benchmark.context?.suite_name, suite.suite, true],
   ];
 
-  for (const [field, actual, expected] of claimed) {
-    if (actual !== undefined && actual !== expected) {
+  for (const [field, actual, expected, required] of claimed) {
+    if (actual === undefined) {
+      if (required) {
+        addError(
+          `${suite.skill}/${suite.suite}: ${field} is missing. The eval runner ` +
+            `requires it, so the suite would fail to run.`
+        );
+      }
+      continue;
+    }
+    if (actual !== expected) {
       addError(
         `${suite.skill}/${suite.suite}: ${field} is "${actual}" but this directory ` +
           `is "${expected}". The eval runner resolves the skill and suite from these ` +
@@ -134,10 +160,31 @@ function checkIdentity(suite, evalsFile, currentMatrix, baseline, benchmark) {
 }
 
 function checkEvalSet(suite, evalsFile, benchmark) {
-  const expected = (evalsFile.evals ?? []).map((item) => evalKey(item.id, item.name));
-  const recorded = (benchmark.evals ?? []).map((item) =>
-    evalKey(item.eval_id, item.eval_name)
-  );
+  // A malformed evals field should read as a validation error, not a TypeError
+  // out of .map that aborts the whole run.
+  for (const [label, value] of [
+    ["evals.json evals", evalsFile.evals],
+    ["baseline aggregate evals", benchmark.evals],
+  ]) {
+    if (!Array.isArray(value)) {
+      addError(`${suite.skill}/${suite.suite}: ${label} is not an array.`);
+      return;
+    }
+  }
+
+  const expected = evalsFile.evals.map((item) => evalKey(item.id, item.name));
+  const recorded = benchmark.evals.map((item) => evalKey(item.eval_id, item.eval_name));
+
+  // The runner derives each run's output directory from the eval id, so two evals
+  // sharing an id overwrite each other's results instead of failing.
+  const ids = evalsFile.evals.map((item) => item.id);
+  const duplicateIds = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
+  if (duplicateIds.length > 0) {
+    addError(
+      `${suite.skill}/${suite.suite}: evals.json reuses eval id ${duplicateIds.join(", ")}. ` +
+        `Runs are written per id, so duplicates overwrite each other.`
+    );
+  }
 
   const missing = expected.filter((item) => !recorded.includes(item));
   const extra = recorded.filter((item) => !expected.includes(item));

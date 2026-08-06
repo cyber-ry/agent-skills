@@ -26,7 +26,9 @@ jobs:
           cache: false
 
       - name: Install skill-validator
-        run: go install github.com/agent-ecosystem/skill-validator/cmd/skill-validator@v1.5.6
+        run: |
+          version="$(node -p "require('./package.json').skillValidatorVersion")"
+          go install "github.com/agent-ecosystem/skill-validator/cmd/skill-validator@${version}"
 
       - name: Install dependencies
         run: npm ci

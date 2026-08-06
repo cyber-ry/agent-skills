@@ -1,1 +1,3 @@
-npm run validate
+# Skip link checking so committing does not depend on network access.
+# CI runs the full `npm run validate`, links included.
+npm run validate:offline

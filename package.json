@@ -9,7 +9,6 @@
     "eval:aggregate": "npm run eval:aggregate --workspace=redis-development-build --",
     "eval:baseline": "npm run eval:baseline --workspace=redis-development-build --",
     "validate": "npm run validate:plugins && npm run validate:eval-baselines && npm run validate:skill-structure",
-    "validate:offline": "npm run validate:plugins && npm run validate:eval-baselines && npm run validate:skill-structure -- --skip links",
     "validate:eval-baselines": "node scripts/validate-eval-baselines.mjs",
     "validate:skill-structure": "node scripts/validate-skill-structure.mjs --all --enforce",
     "validate:claude-plugins": "node scripts/validate-claude-plugins.mjs",

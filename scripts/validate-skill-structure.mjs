@@ -70,7 +70,6 @@ function parseArgs(args) {
     all: false,
     enforce: false,
     changedBaseRef: null,
-    skip: null,
     paths: [],
   };
 
@@ -83,15 +82,6 @@ function parseArgs(args) {
       case "--enforce":
         parsed.enforce = true;
         break;
-      case "--skip": {
-        const value = args[index + 1];
-        if (!value) {
-          fail(`Missing value for ${arg}.`);
-        }
-        parsed.skip = value;
-        index += 1;
-        break;
-      }
       case "--changed":
       case "--base-ref": {
         const value = args[index + 1];
@@ -132,9 +122,6 @@ Options:
   --all                 Validate all skill directories under skills/.
   --changed <base-ref>  Validate skill directories changed against origin/<base-ref>...HEAD.
   --enforce             Exit non-zero when skill-validator reports errors.
-  --skip <groups>       Comma-separated check groups to skip: structure, links,
-                        content, contamination. Use --skip links to validate
-                        without network access.
   --help                Show this help text.
 `);
 }
@@ -201,9 +188,6 @@ function validateSkill(skillDir) {
   const args = ["check", "-o", "json"];
   if (ALLOW_DIRS.length > 0) {
     args.push(`--allow-dirs=${ALLOW_DIRS.join(",")}`);
-  }
-  if (options.skip) {
-    args.push(`--skip=${options.skip}`);
   }
   args.push(skillDir);
 

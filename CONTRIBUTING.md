@@ -6,8 +6,9 @@
 npm install
 ```
 
-This installs dependencies and sets up the Husky pre-commit hook, which runs
-`npm run validate:offline` before every commit.
+This installs dependencies and sets up the Husky pre-commit hook, which validates
+the plugin manifests and eval baselines before every commit. Skill-structure
+validation runs in CI, not in the hook.
 
 Skill-structure validation additionally needs `skill-validator`, a Go binary that
 is not an npm dependency:
@@ -115,7 +116,6 @@ manual validation you performed instead.
 
 ```bash
 npm run validate                  # Plugin manifests + eval baselines + agentskills.io spec (what CI runs)
-npm run validate:offline          # Same, minus link checking — no network needed (what pre-commit runs)
 npm run validate:eval-baselines   # Every eval suite has a baseline, and it is not stale
 npm run validate:skill-structure  # Skill-structure validation only
 npm run validate:plugins          # Claude + Cursor plugin manifests only
@@ -123,5 +123,5 @@ npm run eval                      # Run configured skill eval suites
 ```
 
 `npm run validate` checks every external link in a skill by making a live request,
-so it needs network access and fails when a documentation host is unreachable.
-Use `validate:offline` when working offline.
+so it needs network access and reports errors when a documentation host is
+unreachable. The pre-commit hook deliberately skips it for that reason.

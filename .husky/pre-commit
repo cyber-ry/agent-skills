@@ -1,3 +1,4 @@
-# Skip link checking so committing does not depend on network access.
-# CI runs the full `npm run validate`, links included.
-npm run validate:offline
+# Fast deterministic checks only. Skill-structure validation fetches every
+# external link, so a flaky network would fail a good commit; CI runs it.
+npm run validate:plugins
+npm run validate:eval-baselines

@@ -1,4 +1,3 @@
-# Fast deterministic checks only. Skill-structure validation fetches every
-# external link, so a flaky network would fail a good commit; CI runs it.
+# Not the full validate: its link checks would fail commits on a flaky network.
 npm run validate:plugins
 npm run validate:eval-baselines

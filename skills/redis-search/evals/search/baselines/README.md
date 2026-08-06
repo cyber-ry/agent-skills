@@ -1,14 +1,14 @@
-# core Baseline
+# search Baseline
 
-Updated: 2026-08-06T09:51:24.859Z
+Updated: 2026-08-06T09:51:02.979Z
 
-Skill: `redis-core`
+Skill: `redis-search`
 
-Suite: `core`
+Suite: `search`
 
 Source iteration: `iteration-1`
 
-Source output: `eval-workspaces/redis-core/core/iteration-1`
+Source output: `eval-workspaces/redis-search/search/iteration-1`
 
 This is a curated aggregate benchmark snapshot. Use it as the shared reference
 when comparing future skill changes against the current accepted behavior.
@@ -24,5 +24,5 @@ when comparing future skill changes against the current accepted behavior.
 ## Update Command
 
 ```bash
-npm run eval:baseline -- --skill redis-core --suite core --iteration iteration-1
+npm run eval:baseline -- --skill redis-search --suite search --iteration iteration-1
 ```

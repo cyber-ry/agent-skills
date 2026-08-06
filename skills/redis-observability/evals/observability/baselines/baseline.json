@@ -1,10 +1,10 @@
 {
   "baseline_name": "current",
-  "updated_at": "2026-08-06T09:51:24.859Z",
-  "skill_name": "redis-core",
-  "eval_suite": "core",
+  "updated_at": "2026-08-06T09:50:53.948Z",
+  "skill_name": "redis-observability",
+  "eval_suite": "observability",
   "iteration": "iteration-1",
-  "input_root": "eval-workspaces/redis-core/core/iteration-1",
+  "input_root": "eval-workspaces/redis-observability/observability/iteration-1",
   "included_files": [
     "aggregate-benchmark.json",
     "aggregate-benchmark.md",

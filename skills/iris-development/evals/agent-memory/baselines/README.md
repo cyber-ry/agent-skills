@@ -24,5 +24,5 @@ when comparing future skill changes against the current accepted behavior.
 ## Update Command
 
 ```bash
-npm run eval:baseline -- --skill iris-development --suite agent-memory --iteration iteration-1
+npm run eval:baseline -- --skill iris-development --suite agent-memory
 ```

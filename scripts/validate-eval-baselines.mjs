@@ -108,10 +108,14 @@ function checkMatrix(suite, current, baseline) {
   }
 }
 
-// A promoted baseline names its own suite, so a directory holding another
-// suite's aggregate is caught even when the eval names happen to align.
-function checkIdentity(suite, baseline, benchmark) {
+// Every file here names the suite it belongs to, and the runner resolves the
+// skill directory from evals.json's skill_name, so a wrong name runs against
+// another skill rather than failing. The directory is the ground truth.
+function checkIdentity(suite, evalsFile, currentMatrix, baseline, benchmark) {
   const claimed = [
+    ["evals.json skill_name", evalsFile.skill_name, suite.skill],
+    ["evals.json eval_suite", evalsFile.eval_suite, suite.suite],
+    ["model-matrix.json eval_suite", currentMatrix.eval_suite, suite.suite],
     ["baseline.json skill_name", baseline.skill_name, suite.skill],
     ["baseline.json eval_suite", baseline.eval_suite, suite.suite],
     ["aggregate context.skill_name", benchmark.context?.skill_name, suite.skill],
@@ -121,9 +125,9 @@ function checkIdentity(suite, baseline, benchmark) {
   for (const [field, actual, expected] of claimed) {
     if (actual !== undefined && actual !== expected) {
       addError(
-        `${suite.skill}/${suite.suite}: baseline belongs to a different suite ` +
-          `(${field} is "${actual}", expected "${expected}"). ` +
-          `Re-promote it from this suite's own run: ${promoteHint(suite)}`
+        `${suite.skill}/${suite.suite}: ${field} is "${actual}" but this directory ` +
+          `is "${expected}". The eval runner resolves the skill and suite from these ` +
+          `fields, so they must match the directory they sit in.`
       );
     }
   }
@@ -187,7 +191,7 @@ async function validateSuite(suite) {
 
   if (!evalsFile || !currentMatrix || !baseline || !baselineMatrix || !benchmark) return;
 
-  checkIdentity(suite, baseline, benchmark);
+  checkIdentity(suite, evalsFile, currentMatrix, baseline, benchmark);
   checkMatrix(suite, currentMatrix, baselineMatrix);
   checkEvalSet(suite, evalsFile, benchmark);
 }

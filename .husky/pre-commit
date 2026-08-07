@@ -1,1 +1,2 @@
-npm run validate
+# Not the full validate: its link checks would fail commits on a flaky network.
+npm run validate:plugins && npm run validate:eval-baselines

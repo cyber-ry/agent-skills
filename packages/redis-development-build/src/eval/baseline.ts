@@ -336,7 +336,7 @@ ${includedFiles.map((file) => `- \`${file}\``).join('\n')}
 ## Update Command
 
 \`\`\`bash
-npm run eval:baseline -- --skill ${target.skill} --suite ${target.suite} --iteration ${target.iteration}${options.name ? ` --name ${options.name}` : ''}${options.includeHtml ? ' --include-html' : ''}
+npm run eval:baseline -- --skill ${target.skill} --suite ${target.suite}${options.name ? ` --name ${options.name}` : ''}${options.includeHtml ? ' --include-html' : ''}
 \`\`\`
 `
 }

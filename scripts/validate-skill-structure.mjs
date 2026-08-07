@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { appendFileSync, readdirSync, statSync } from "node:fs";
+import { appendFileSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
 const repoRoot = process.cwd();
 const skillsRoot = path.join(repoRoot, "skills");
+
+// skill-validator is a Go binary, not an npm dependency, so a fresh clone won't
+// have it. package.json is the single source for the version CI installs.
+const VALIDATOR_MODULE = "github.com/agent-ecosystem/skill-validator/cmd/skill-validator";
 
 // Subdirectories that exist for repo tooling (not the agent runtime) and that
 // skill-validator should accept without "unknown directory" warnings. The
@@ -15,6 +19,11 @@ const skillsRoot = path.join(repoRoot, "skills");
 const ALLOW_DIRS = ["evals"];
 
 const options = parseArgs(process.argv.slice(2));
+
+if (!isValidatorInstalled()) {
+  reportMissingValidator();
+}
+
 const skillDirs = resolveSkillDirs(options);
 
 if (skillDirs.length === 0) {
@@ -280,6 +289,35 @@ function emitWarning({ file, title, message }) {
     .filter(Boolean)
     .join(",");
   console.log(`::warning ${properties}::${escapeAnnotationMessage(message)}`);
+}
+
+function isValidatorInstalled() {
+  const probe = spawnSync("skill-validator", ["--version"], { encoding: "utf8" });
+  return !probe.error;
+}
+
+// Skipping locally keeps the pre-commit hook usable on a fresh clone; skipping in
+// CI would let unvalidated skills merge, so there it fails instead.
+function reportMissingValidator() {
+  const install = `go install ${VALIDATOR_MODULE}@${validatorVersion()}`;
+  const notice = `skill-validator was not found on PATH. Install it with:\n\n  ${install}\n`;
+
+  if (process.env.CI) {
+    fail(`${notice}\nRefusing to skip skill structure validation in CI.`);
+  }
+
+  console.warn(`${notice}\nSkipping skill structure validation. CI enforces it on every PR.`);
+  writeStepSummary(`## Skill Structure Validation\n\nSkipped: skill-validator is not installed.\n`);
+  process.exit(0);
+}
+
+function validatorVersion() {
+  try {
+    const manifest = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+    return manifest.skillValidatorVersion ?? "latest";
+  } catch {
+    return "latest";
+  }
 }
 
 function hasSkillFile(skillDir) {

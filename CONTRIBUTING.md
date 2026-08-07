@@ -6,7 +6,22 @@
 npm install
 ```
 
-This installs dependencies and sets up the Husky pre-commit hook that runs `npm run validate` before every commit.
+This installs dependencies and sets up the Husky pre-commit hook, which validates
+the plugin manifests and eval baselines before every commit. Skill-structure
+validation runs in CI, not in the hook.
+
+Skill-structure validation additionally needs `skill-validator`, a Go binary that
+is not an npm dependency:
+
+```bash
+go install github.com/agent-ecosystem/skill-validator/cmd/skill-validator@v1.5.6
+```
+
+Make sure `$(go env GOPATH)/bin` is on your `PATH`. Without the binary, commits
+still succeed — structure validation prints the install command and skips — but
+CI enforces it, so install it before opening a PR. CI reads the version from the
+`skillValidatorVersion` field in `package.json`; keep the command above in sync
+with it.
 
 ## Skill Structure
 
@@ -71,6 +86,24 @@ npm run eval:baseline
 npm run eval:baseline -- --skill <skill-name> --suite <suite-name>
 ```
 
+### Every suite needs a current baseline
+
+`npm run validate` enforces that each eval suite has a committed baseline under
+`evals/<suite-name>/baselines/`, and that the baseline still describes the suite
+next to it. It fails when:
+
+- the baseline is missing,
+- the suite's `model-matrix.json` no longer matches the one the baseline was run
+  with (models, configurations, repetitions, or judge model), or
+- `evals.json` defines evals the baseline does not cover, or the baseline covers
+  evals that no longer exist.
+
+Without this, the "Against Baseline" section of a report silently compares unlike
+runs rather than failing — a stale baseline looks like a valid one. So adding or
+editing an eval, or changing the model matrix, means re-running the suite and
+promoting the result. Reordering the `models` list is not a change and does not
+trip the check.
+
 In the PR description, include the eval command you ran, summarize the combined
 report's headline numbers (pass/token/time/cost deltas), and **attach
 screenshots** of the HTML report's "Against Baseline" summary and per-model
@@ -82,8 +115,13 @@ manual validation you performed instead.
 ## Commands
 
 ```bash
-npm run validate                  # Plugin manifests + agentskills.io spec validation (what CI runs)
+npm run validate                  # Plugin manifests + eval baselines + agentskills.io spec (what CI runs)
+npm run validate:eval-baselines   # Every eval suite has a baseline, and it is not stale
 npm run validate:skill-structure  # Skill-structure validation only
 npm run validate:plugins          # Claude + Cursor plugin manifests only
 npm run eval                      # Run configured skill eval suites
 ```
+
+`npm run validate` checks every external link in a skill by making a live request,
+so it needs network access and reports errors when a documentation host is
+unreachable. The pre-commit hook deliberately skips it for that reason.

@@ -167,8 +167,17 @@ function checkIdentity(suite, evalsFile, currentMatrix, baseline, benchmark) {
 // checkMatrix compares two copies of the matrix, so it cannot see whether the
 // run behind the baseline actually covered them. A run killed partway and then
 // promoted yields a baseline whose scores come from a subset of the models.
-function checkCoverage(suite, currentMatrix, benchmark) {
-  if (!Array.isArray(currentMatrix.models) || !Array.isArray(benchmark.models)) return;
+function checkCoverage(suite, currentMatrix, benchmark, evalsFile) {
+  if (!Array.isArray(currentMatrix.models)) return;
+  // The live matrix gets loud validation from the runner, but nothing else ever
+  // reads the committed aggregate, so its absence must fail here rather than skip.
+  if (!Array.isArray(benchmark.models)) {
+    addError(
+      `${suite.skill}/${suite.suite}: baseline aggregate has no models array, so ` +
+        `coverage cannot be verified. ${promoteHint(suite)}`
+    );
+    return;
+  }
 
   const expected = currentMatrix.models.map(String);
   const scored = benchmark.models.map((entry) => entry?.model).filter(Boolean).map(String);
@@ -187,6 +196,33 @@ function checkCoverage(suite, currentMatrix, benchmark) {
       `${suite.skill}/${suite.suite}: baseline scores ${extra.join(", ")}, which the ` +
         `matrix no longer lists. ${promoteHint(suite)}`
     );
+  }
+
+  // Model names alone cannot tell a full run from a killed one that touched every
+  // model. Each configuration records its run count, which a complete run pins to
+  // repetitions × eval count.
+  const evalCount = Array.isArray(evalsFile.evals) ? evalsFile.evals.length : 0;
+  const repetitions = currentMatrix.repetitions;
+  if (!Number.isInteger(repetitions) || evalCount === 0) return;
+
+  const configurations = Array.isArray(currentMatrix.configurations)
+    ? currentMatrix.configurations
+    : ["with_skill", "without_skill"];
+  const expectedRuns = repetitions * evalCount;
+
+  for (const entry of benchmark.models) {
+    if (!entry?.model) continue;
+    for (const configuration of configurations) {
+      const count = entry[configuration]?.count;
+      if (count !== expectedRuns) {
+        addError(
+          `${suite.skill}/${suite.suite}: baseline records ${count ?? 0} ` +
+            `${configuration} runs for ${entry.model}, expected ${expectedRuns} ` +
+            `(${repetitions} repetitions x ${evalCount} evals). The promoted run ` +
+            `was partial. ${promoteHint(suite)}`
+        );
+      }
+    }
   }
 }
 
@@ -271,7 +307,7 @@ async function validateSuite(suite) {
 
   checkIdentity(suite, evalsFile, currentMatrix, baseline, benchmark);
   checkMatrix(suite, currentMatrix, baselineMatrix);
-  checkCoverage(suite, currentMatrix, benchmark);
+  checkCoverage(suite, currentMatrix, benchmark, evalsFile);
   checkEvalSet(suite, evalsFile, benchmark);
 }
 

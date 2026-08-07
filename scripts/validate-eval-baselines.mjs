@@ -202,8 +202,18 @@ function checkCoverage(suite, currentMatrix, benchmark, evalsFile) {
   // model. Each configuration records its run count, which a complete run pins to
   // repetitions × eval count.
   const evalCount = Array.isArray(evalsFile.evals) ? evalsFile.evals.length : 0;
-  const repetitions = currentMatrix.repetitions;
-  if (!Number.isInteger(repetitions) || evalCount === 0) return;
+  if (evalCount === 0) return; // an empty eval set is checkEvalSet's finding
+
+  // Mirrors the runner's `matrix.repetitions ?? 1`; skipping on a missing field
+  // would silently exempt that suite from the count check forever.
+  const repetitions = currentMatrix.repetitions ?? 1;
+  if (!Number.isInteger(repetitions) || repetitions < 1) {
+    addError(
+      `${suite.skill}/${suite.suite}: model-matrix.json repetitions is ` +
+        `${JSON.stringify(currentMatrix.repetitions)}, expected a positive integer.`
+    );
+    return;
+  }
 
   const configurations = Array.isArray(currentMatrix.configurations)
     ? currentMatrix.configurations

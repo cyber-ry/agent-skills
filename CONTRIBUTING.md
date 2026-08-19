@@ -7,7 +7,7 @@ npm install
 ```
 
 This installs dependencies and sets up the Husky pre-commit hook, which validates
-the plugin manifests and eval baselines before every commit. Skill-structure
+the Codex, Claude, and Cursor plugin manifests and eval baselines before every commit. Skill-structure
 validation runs in CI, not in the hook.
 
 Skill-structure validation additionally needs `skill-validator`, a Go binary that
@@ -25,7 +25,7 @@ with it.
 
 ## Source of Truth
 
-`skills/` is where you edit. `plugins/redis-development/skills/` is generated from it: real copies, committed, because Claude Code and Cursor both drop symlinks that escape a plugin root when a plugin is installed from git, and because the Claude Code directory only notices an update when that subdirectory itself changes.
+`skills/` is where you edit. `plugins/redis-development/skills/` is generated from it: real copies, committed for the ChatGPT, Codex, and Claude Code package because plugin installers may drop symlinks that escape a plugin root, and because the Claude Code directory only notices an update when that subdirectory itself changes.
 
 Editing a skill therefore touches two paths, and the hook handles the second one:
 

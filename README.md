@@ -34,6 +34,14 @@ You can also install the skills as a Claude Code plugin:
 /plugin install redis-development@redis
 ```
 
+### ChatGPT and Codex Plugin
+
+The distributable plugin package for ChatGPT and Codex lives at
+[`plugins/redis-development/`](plugins/redis-development/). It includes the
+required `.codex-plugin/plugin.json` manifest and real copies of every skill.
+Archive that directory—not the repository root—when preparing a skills-only
+submission to the OpenAI plugin submission portal.
+
 ### Cursor Plugin
 
 This repository also includes Cursor plugin packaging. Run this command in chat:
@@ -42,7 +50,7 @@ This repository also includes Cursor plugin packaging. Run this command in chat:
 /add-plugin redis
 ```
 
-The top-level `skills/` directory remains the source of truth. `plugins/redis-development/skills/` holds generated real copies of it (not symlinks, which Claude Code and Cursor drop when a plugin is installed from git); `npm run sync:plugins` regenerates them and the pre-commit hook keeps them current. See [AGENTS.md](AGENTS.md#where-skills-live).
+The top-level `skills/` directory remains the source of truth. `plugins/redis-development/skills/` holds generated real copies used by the ChatGPT, Codex, and Claude Code plugin package (not symlinks, which plugin installation flows may drop); `npm run sync:plugins` regenerates them and the pre-commit hook keeps them current. See [AGENTS.md](AGENTS.md#where-skills-live).
 
 ## Usage
 
